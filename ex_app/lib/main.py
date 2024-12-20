@@ -52,6 +52,9 @@ class BackgroundProcessTask(threading.Thread):
     def run(self, *args, **kwargs):  # pylint: disable=unused-argument
         nc = NextcloudApp()
         while True:
+            if not app_enabled.is_set():
+                sleep(30)
+                continue
             try:
                 next = nc.providers.task_processing.next_task([TASKPROCESSING_PROVIDER_ID], ['core:text2image'])
                 if not 'task' in next or next is None:
@@ -61,7 +64,7 @@ class BackgroundProcessTask(threading.Thread):
             except Exception as e:
                 print(str(e))
                 log(nc, LogLvl.ERROR, str(e))
-                sleep(5)
+                sleep(30)
                 continue
             try:
                 log(nc, LogLvl.INFO, f"Next task: {task['id']}")
@@ -89,6 +92,7 @@ class BackgroundProcessTask(threading.Thread):
                     nc.providers.task_processing.report_result(task["id"], None, str(e))
                 except:
                     pass
+                sleep(30)
 
 
 
