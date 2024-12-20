@@ -52,6 +52,9 @@ class BackgroundProcessTask(threading.Thread):
     def run(self, *args, **kwargs):  # pylint: disable=unused-argument
         nc = NextcloudApp()
         while True:
+            if not app_enabled.is_set():
+                sleep(30)
+                continue
             try:
                 next = nc.providers.task_processing.next_task([TASKPROCESSING_PROVIDER_ID], ['core:text2image'])
                 if not 'task' in next or next is None:
