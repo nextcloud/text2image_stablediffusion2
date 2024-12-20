@@ -64,7 +64,7 @@ class BackgroundProcessTask(threading.Thread):
             except Exception as e:
                 print(str(e))
                 log(nc, LogLvl.ERROR, str(e))
-                sleep(5)
+                sleep(30)
                 continue
             try:
                 log(nc, LogLvl.INFO, f"Next task: {task['id']}")
@@ -92,6 +92,7 @@ class BackgroundProcessTask(threading.Thread):
                     nc.providers.task_processing.report_result(task["id"], None, str(e))
                 except:
                     pass
+                sleep(30)
 
 
 
