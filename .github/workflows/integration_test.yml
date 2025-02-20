@@ -11,7 +11,7 @@ on:
       - stable*
 
 env:
-  APP_NAME: llm2
+  APP_NAME: text2image_stablediffusion2
 
 concurrency:
   group: integration-test-${{ github.head_ref || github.run_id }}
@@ -38,7 +38,7 @@ jobs:
 
       PYTHONUNBUFFERED: 1
       APP_HOST: 0.0.0.0
-      APP_ID: llm2
+      APP_ID: text2image_stablediffusion2
       APP_PORT: 9080
       APP_SECRET: 12345
       COMPUTE_DEVICE: CPU
@@ -136,7 +136,7 @@ jobs:
       - name: Register backend
         run: |
           ./occ app_api:daemon:register --net host manual_install "Manual Install" manual-install http localhost http://localhost:8080
-          ./occ app_api:app:register llm2 manual_install --json-info "{\"appid\":\"text2image_stablediffusion2\",\"name\":\"Local image generation\",\"daemon_config_name\":\"manual_install\",\"version\":\"${{ fromJson(steps.appinfo.outputs.result).version }}\",\"secret\":\"12345\",\"port\":9080,\"scopes\":[\"AI_PROVIDERS\", \"TASK_PROCESSING\"],\"system_app\":0}" --force-scopes --wait-finish
+          ./occ app_api:app:register text2image_stablediffusion2 manual_install --json-info "{\"appid\":\"text2image_stablediffusion2\",\"name\":\"Local image generation\",\"daemon_config_name\":\"manual_install\",\"version\":\"${{ fromJson(steps.appinfo.outputs.result).version }}\",\"secret\":\"12345\",\"port\":9080,\"scopes\":[\"AI_PROVIDERS\", \"TASK_PROCESSING\"],\"system_app\":0}" --force-scopes --wait-finish
 
       - name: Run task
         env:
@@ -144,7 +144,7 @@ jobs:
         run: |
           set -x
           sleep 300
-          TASK=$(curl -X POST -u "$CREDS" -H "oCS-APIRequest: true" -H "Content-type: application/json" http://localhost:8080/ocs/v2.php/taskprocessing/schedule?format=json --data-raw '{"input": {"input": "An astronaut riding a horse under water"},"type":"core:text2image", "appId": "test", "customId": ""}')
+          TASK=$(curl -X POST -u "$CREDS" -H "oCS-APIRequest: true" -H "Content-type: application/json" http://localhost:8080/ocs/v2.php/taskprocessing/schedule?format=json --data-raw '{"input": {"input": "An astronaut riding a horse under water", "numberOfImages": 1},"type":"core:text2image", "appId": "test", "customId": ""}')
           echo $TASK
           TASK_ID=$(echo $TASK | jq '.ocs.data.task.id')
           NEXT_WAIT_TIME=0
