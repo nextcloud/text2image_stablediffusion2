@@ -5,6 +5,7 @@ from threading import Event
 from time import sleep, perf_counter
 import logging
 
+import torch
 import PIL.Image
 from fastapi import FastAPI
 from nc_py_api import NextcloudApp
@@ -26,7 +27,7 @@ def log(nc, level, content):
 
 TASKPROCESSING_PROVIDER_ID = 'text2image_stablediffusion2:sdxl_turbo'
 
-pipe = AutoPipelineForText2Image.from_pretrained("stabilityai/sdxl-turbo")
+pipe = AutoPipelineForText2Image.from_pretrained("Nextcloud-AI/sdxl-turbo", torch_dtype=torch.float16, variant="fp16")
 
 if get_computation_device().lower() == 'cuda':
     pipe.to("cuda")
