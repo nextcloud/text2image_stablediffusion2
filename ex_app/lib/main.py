@@ -1,3 +1,4 @@
+import asyncio
 import io
 import threading
 from contextlib import asynccontextmanager
@@ -20,8 +21,10 @@ logger.setLevel(logging.INFO)
 
 def log(nc, level, content):
     logger.log((level+1)*10, content)
+    if level < LogLvl.WARNING:
+        return
     try:
-        nc.log(level, content)
+        asyncio.run(nc.log(level, content))
     except:
         pass
 
