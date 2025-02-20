@@ -30,11 +30,12 @@ def log(nc, level, content):
 
 TASKPROCESSING_PROVIDER_ID = 'text2image_stablediffusion2:sdxl_turbo'
 
-pipe = AutoPipelineForText2Image.from_pretrained("Nextcloud-AI/sdxl-turbo", torch_dtype=torch.float16, variant="fp16")
+def load_model():
+    pipe = AutoPipelineForText2Image.from_pretrained("Nextcloud-AI/sdxl-turbo", torch_dtype=torch.float16, variant="fp16")
 
-if get_computation_device().lower() == 'cuda':
-    pipe.to("cuda")
-
+    if get_computation_device().lower() == 'cuda':
+        pipe.to("cuda")
+    return pipe
 
 app_enabled = Event()
 @asynccontextmanager
@@ -55,8 +56,13 @@ APP.add_middleware(AppAPIAuthMiddleware)  # set global AppAPI authentication mid
 class BackgroundProcessTask(threading.Thread):
     def run(self, *args, **kwargs):  # pylint: disable=unused-argument
         nc = NextcloudApp()
+        while not app_enabled.is_set():
+            sleep(5)
+
+        pipe = load_model()
+
         while True:
-            if not app_enabled.is_set():
+            if not app_enabled.is_set() or pipe is None:
                 sleep(30)
                 continue
             try:
