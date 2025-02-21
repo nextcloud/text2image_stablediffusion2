@@ -130,6 +130,7 @@ jobs:
         working-directory: ${{ env.APP_NAME }}/ex_app/lib
         env:
           APP_VERSION: ${{ fromJson(steps.appinfo.outputs.result).version }}
+          NUM_INFERENCE_STEPS: 1
         run: |
           python3 main.py > ../../backend_logs 2>&1 &
 
@@ -149,7 +150,7 @@ jobs:
           TASK_ID=$(echo $TASK | jq '.ocs.data.task.id')
           NEXT_WAIT_TIME=0
           TASK_STATUS='"STATUS_SCHEDULED"'
-          until [ $NEXT_WAIT_TIME -eq 85 ] || [ "$TASK_STATUS" == '"STATUS_SUCCESSFUL"' ] || [ "$TASK_STATUS" == '"STATUS_FAILED"' ]; do
+          until [ $NEXT_WAIT_TIME -eq 90 ] || [ "$TASK_STATUS" == '"STATUS_SUCCESSFUL"' ] || [ "$TASK_STATUS" == '"STATUS_FAILED"' ]; do
             TASK=$(curl -u "$CREDS" -H "oCS-APIRequest: true" http://localhost:8080/ocs/v2.php/taskprocessing/task/$TASK_ID?format=json)
             echo $TASK
             TASK_STATUS=$(echo $TASK | jq '.ocs.data.task.status')

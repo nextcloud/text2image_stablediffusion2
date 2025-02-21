@@ -1,5 +1,6 @@
 import asyncio
 import io
+import os
 import threading
 from contextlib import asynccontextmanager
 from threading import Event
@@ -82,7 +83,7 @@ class BackgroundProcessTask(threading.Thread):
                 log(nc, LogLvl.INFO, "generating image")
                 time_start = perf_counter()
                 prompt = task.get("input").get('input')
-                images: List[PIL.Image.Image] = pipe(prompt=prompt, num_inference_steps=4, guidance_scale=0.0, num_images_per_prompt=task.get("input").get('numberOfImages')).images
+                images: List[PIL.Image.Image] = pipe(prompt=prompt, num_inference_steps=int(os.getenv('NUM_INFERENCE_STEPS', 4)), guidance_scale=0.0, num_images_per_prompt=task.get("input").get('numberOfImages')).images
                 log(nc, LogLvl.INFO, f"image generated: {perf_counter() - time_start}s")
 
                 img_ids = []
