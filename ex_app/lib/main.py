@@ -1,10 +1,13 @@
+import asyncio
 import io
+import os
 import threading
 from contextlib import asynccontextmanager
 from threading import Event
 from time import sleep, perf_counter
 import logging
 
+import torch
 import PIL.Image
 from fastapi import FastAPI
 from nc_py_api import NextcloudApp
@@ -19,18 +22,21 @@ logger.setLevel(logging.INFO)
 
 def log(nc, level, content):
     logger.log((level+1)*10, content)
+    if level < LogLvl.WARNING:
+        return
     try:
-        nc.log(level, content)
+        asyncio.run(nc.log(level, content))
     except:
         pass
 
 TASKPROCESSING_PROVIDER_ID = 'text2image_stablediffusion2:sdxl_turbo'
 
-pipe = AutoPipelineForText2Image.from_pretrained("stabilityai/sdxl-turbo")
+def load_model():
+    pipe = AutoPipelineForText2Image.from_pretrained("Nextcloud-AI/sdxl-turbo", torch_dtype=torch.float16, variant="fp16")
 
-if get_computation_device().lower() == 'cuda':
-    pipe.to("cuda")
-
+    if get_computation_device().lower() == 'cuda':
+        pipe.to("cuda")
+    return pipe
 
 app_enabled = Event()
 @asynccontextmanager
@@ -51,8 +57,13 @@ APP.add_middleware(AppAPIAuthMiddleware)  # set global AppAPI authentication mid
 class BackgroundProcessTask(threading.Thread):
     def run(self, *args, **kwargs):  # pylint: disable=unused-argument
         nc = NextcloudApp()
+        while not app_enabled.is_set():
+            sleep(5)
+
+        pipe = load_model()
+
         while True:
-            if not app_enabled.is_set():
+            if not app_enabled.is_set() or pipe is None:
                 sleep(30)
                 continue
             try:
@@ -72,7 +83,7 @@ class BackgroundProcessTask(threading.Thread):
                 log(nc, LogLvl.INFO, "generating image")
                 time_start = perf_counter()
                 prompt = task.get("input").get('input')
-                images: List[PIL.Image.Image] = pipe(prompt=prompt, num_inference_steps=4, guidance_scale=0.0, num_images_per_prompt=task.get("input").get('numberOfImages')).images
+                images: List[PIL.Image.Image] = pipe(prompt=prompt, num_inference_steps=int(os.getenv('NUM_INFERENCE_STEPS', 4)), guidance_scale=0.0, num_images_per_prompt=task.get("input").get('numberOfImages')).images
                 log(nc, LogLvl.INFO, f"image generated: {perf_counter() - time_start}s")
 
                 img_ids = []
