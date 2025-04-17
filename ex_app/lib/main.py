@@ -36,6 +36,10 @@ def load_model():
 
     if get_computation_device().lower() == 'cuda':
         pipe.to("cuda")
+        pipe.enable_xformers_memory_efficient_attention()
+        pipe.enable_model_cpu_offload()
+        pipe.enable_attention_slicing()
+
     return pipe
 
 app_enabled = Event()
