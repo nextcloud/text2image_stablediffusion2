@@ -10,7 +10,7 @@ Text2Image provider using Stable Diffusion XL by Stability AI
 The models run completely on your machine. No private data leaves your servers.
 ]]>
 	</description>
-	<version>1.0.3</version>
+	<version>1.0.4</version>
 	<licence>MIT</licence>
 	<author mail="mklehr@gmx.net" homepage="https://marcelklehr.de">Marcel Klehr</author>
 	<namespace>Text2ImageStableDiffusion2</namespace>
