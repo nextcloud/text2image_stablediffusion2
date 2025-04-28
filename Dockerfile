@@ -13,9 +13,6 @@ RUN \
    update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1
 
 RUN \
-  python3 -m pip install torch
-
-RUN \
   python3 -m pip install -r requirements.txt && rm -rf ~/.cache && rm requirements.txt
 
 ADD /ex_app/cs[s] /ex_app/css

@@ -2,5 +2,3 @@ nc_py_api[app]>=0.17.1
 diffusers
 transformers
 accelerate
-torch
-xformers
