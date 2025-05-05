@@ -12,9 +12,6 @@ RUN \
    apt-get install -y --no-install-recommends python3.11 python3.11-venv python3-pip vim git pciutils curl && \
    update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1
 
-RUN \
-  python3 -m pip install torch
-
 # Download and install FRP client into /usr/local/bin.
 RUN set -ex; \
     ARCH=$(uname -m); \
