@@ -13,7 +13,7 @@ from fastapi import FastAPI
 from nc_py_api import NextcloudApp
 from nc_py_api.ex_app import AppAPIAuthMiddleware, LogLvl, run_app, set_handlers, get_computation_device
 from diffusers import AutoPipelineForText2Image
-from nc_py_api.ex_app.providers.task_processing import TaskProcessingProvider
+from nc_py_api.ex_app.providers.task_processing import TaskProcessingProvider, ShapeDescriptor, ShapeType
 from typing import List
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', handlers=[logging.StreamHandler()])
@@ -90,7 +90,11 @@ class BackgroundProcessTask(threading.Thread):
                 log(nc, LogLvl.INFO, "generating image")
                 time_start = perf_counter()
                 prompt = task.get("input").get('input')
-                images: List[PIL.Image.Image] = pipe(prompt=prompt, num_inference_steps=int(os.getenv('NUM_INFERENCE_STEPS', 4)), guidance_scale=0.0, num_images_per_prompt=task.get("input").get('numberOfImages')).images
+                size = task.get('input').get('size') or '512x512'
+                width, height = size.split('x')
+                width = int(width)
+                height = int(height)
+                images: List[PIL.Image.Image] = pipe(width=width, height=height, prompt=prompt, num_inference_steps=int(os.getenv('NUM_INFERENCE_STEPS', 4)), guidance_scale=0.0, num_images_per_prompt=task.get("input").get('numberOfImages')).images
                 log(nc, LogLvl.INFO, f"image generated: {perf_counter() - time_start}s")
 
                 img_ids = []
@@ -125,7 +129,10 @@ async def enabled_handler(enabled: bool, nc: NextcloudApp) -> str:
             name='Nextcloud Local Image Generation: Stable Diffusion',
             task_type='core:text2image',
             expected_runtime=120,
-            input_shape_defaults={"numberOfImages": 1},
+            optional_input_shape=[
+                ShapeDescriptor(name='size', description='Optional. The size of the generated images. Must be in 512x512 format. Default is 512x512', shape_type=ShapeType.TEXT),
+            ],
+            input_shape_defaults={'size': '512x512', "numberOfImages": 1},
         ))
         app_enabled.set()
     else:

@@ -145,7 +145,7 @@ jobs:
         run: |
           set -x
           sleep 600
-          TASK=$(curl -X POST -u "$CREDS" -H "oCS-APIRequest: true" -H "Content-type: application/json" http://localhost:8080/ocs/v2.php/taskprocessing/schedule?format=json --data-raw '{"input": {"input": "An astronaut riding a horse under water", "numberOfImages": 1},"type":"core:text2image", "appId": "test", "customId": ""}')
+          TASK=$(curl -X POST -u "$CREDS" -H "oCS-APIRequest: true" -H "Content-type: application/json" http://localhost:8080/ocs/v2.php/taskprocessing/schedule?format=json --data-raw '{"input": {"input": "An astronaut riding a horse under water", "numberOfImages": 1, "size": "128x128"},"type":"core:text2image", "appId": "test", "customId": ""}')
           echo $TASK
           TASK_ID=$(echo $TASK | jq '.ocs.data.task.id')
           NEXT_WAIT_TIME=0
