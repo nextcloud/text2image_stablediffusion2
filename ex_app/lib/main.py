@@ -121,6 +121,7 @@ async def enabled_handler(enabled: bool, nc: NextcloudApp) -> str:
             name='Nextcloud Local Image Generation: Stable Diffusion',
             task_type='core:text2image',
             expected_runtime=120,
+            input_shape_defaults={"numberOfImages": 1},
         ))
         app_enabled.set()
     else:
