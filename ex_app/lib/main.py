@@ -32,13 +32,17 @@ def log(nc, level, content):
 TASKPROCESSING_PROVIDER_ID = 'text2image_stablediffusion2:sdxl_turbo'
 
 def load_model():
-    pipe = AutoPipelineForText2Image.from_pretrained("Nextcloud-AI/sdxl-turbo", torch_dtype=torch.float16, variant="fp16")
-
     if get_computation_device().lower() == 'cuda':
+        pipe = AutoPipelineForText2Image.from_pretrained("Nextcloud-AI/sdxl-turbo", torch_dtype=torch.float16,
+                                                         variant="fp16")
         pipe.to("cuda")
         pipe.enable_model_cpu_offload()
         pipe.enable_attention_slicing()
-
+    else:
+        # Cpu does not support fp16
+        pipe = AutoPipelineForText2Image.from_pretrained("Nextcloud-AI/sdxl-turbo", torch_dtype=torch.float32,
+                                                         variant="fp16")
+        pipe.to("cpu")
     return pipe
 
 app_enabled = Event()
