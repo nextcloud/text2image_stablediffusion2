@@ -76,6 +76,22 @@ jobs:
           git submodule sync --recursive
           git -c "http.extraheader=$auth_header" -c protocol.version=2 submodule update --init --force --recursive --depth=1
 
+      - name: Checkout app_api repo
+        if: ${{ matrix.server-versions == 'master'}}
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v3
+        with:
+          path: ./apps/app_api/
+          repository: nextcloud/app_api
+          ref: main
+
+      - name: Checkout app_api repo
+        if: ${{ matrix.server-versions != 'master'}}
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v3
+        with:
+          path: ./apps/app_api/
+          repository: nextcloud/app_api
+          ref: ${{ matrix.server-versions }}
+
       - name: Set up php ${{ matrix.php-versions }}
         uses: shivammathur/setup-php@0f7f1d08e3e32076e51cae65eb0b0c871405b16e # v2
         with:
