@@ -20,7 +20,7 @@ The models run completely on your machine. No private data leaves your servers.
 	<bugs>https://github.com/nextcloud/text2image_stablediffusion2/issues</bugs>
 	<repository type="git">https://github.com/nextcloud/text2image_stablediffusion2</repository>
 	<dependencies>
-		<nextcloud min-version="30" max-version="31"/>
+		<nextcloud min-version="30" max-version="32"/>
 	</dependencies>
 	<external-app>
 		<docker-install>
