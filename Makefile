@@ -28,6 +28,11 @@ help:
 	@echo "  register          performs registration of running $(APP_NAME) into the 'manual_install' deploy daemon."
 
 
+.PHONY: setup-docker-multiplatform-builds # needs qemu installed on the build machine
+setup-docker-multiplatform-builds:
+	docker run --privileged --rm tonistiigi/binfmt --install all
+	docker run --rm --privileged multiarch/qemu-user-static --reset -p yes -c yes
+
 .PHONY: build-push
 build-push:
 	docker login ghcr.io
