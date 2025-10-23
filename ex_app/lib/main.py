@@ -45,7 +45,13 @@ def load_model():
         pipe.to("cpu")
     return pipe
 
+
 app_enabled = Event()
+TRIGGER = Event()
+
+WAIT_INTERVAL = 5
+WAIT_INTERVAL_WITH_TRIGGER = 5 * 60
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     set_handlers(app, enabled_handler)
@@ -76,13 +82,13 @@ class BackgroundProcessTask(threading.Thread):
             try:
                 next = nc.providers.task_processing.next_task([TASKPROCESSING_PROVIDER_ID], ['core:text2image'])
                 if not 'task' in next or next is None:
-                    sleep(5)
+                    wait_for_task()
                     continue
                 task = next.get('task')
             except Exception as e:
                 print(str(e))
                 log(nc, LogLvl.ERROR, str(e))
-                sleep(30)
+                wait_for_task(30)
                 continue
             try:
                 log(nc, LogLvl.INFO, f"Next task: {task['id']}")
@@ -114,7 +120,7 @@ class BackgroundProcessTask(threading.Thread):
                     nc.providers.task_processing.report_result(task["id"], None, str(e))
                 except:
                     pass
-                sleep(30)
+                wait_for_task(30)
 
 
 
@@ -142,6 +148,23 @@ async def enabled_handler(enabled: bool, nc: NextcloudApp) -> str:
     # In case of an error, a non-empty short string should be returned, which will be shown to the NC administrator.
     return ""
 
+
+def trigger_handler():
+    # This will only get called on Nextcloud 33+
+    TRIGGER.set()
+
+# Waits for `interval` seconds or `WAIT_INTERVAL` seconds
+# if `interval` is not set. If TRIGGER gets set in the meantime,
+# WAIT_INTERVAL gets overriden with WAIT_INTERVAL_WITH_TRIGGER which should be longer
+def wait_for_task(interval = None):
+    global TRIGGER
+    global WAIT_INTERVAL
+    global WAIT_INTERVAL_WITH_TRIGGER
+    if interval is None:
+        interval = WAIT_INTERVAL
+    if TRIGGER.wait(timeout=interval):
+        WAIT_INTERVAL = WAIT_INTERVAL_WITH_TRIGGER
+    TRIGGER.clear()
 
 if __name__ == "__main__":
     # Wrapper around `uvicorn.run`.
