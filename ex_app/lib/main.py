@@ -112,6 +112,7 @@ def background_thread_task():
             for image in images:
                 png_stream = io.BytesIO()
                 image.save(png_stream, format="PNG")
+                png_stream.seek(0)
                 img_ids.append(nc.providers.task_processing.upload_result_file(task.get('id'), png_stream))
 
             NextcloudApp().providers.task_processing.report_result(
