@@ -45,76 +45,88 @@ def load_model():
         pipe.to("cpu")
     return pipe
 
+
 app_enabled = Event()
+TRIGGER = Event()
+
+WAIT_INTERVAL = 5
+WAIT_INTERVAL_WITH_TRIGGER = 5 * 60
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    set_handlers(app, enabled_handler)
-    t = BackgroundProcessTask()
-    t.start()
+    set_handlers(
+        app,
+        enabled_handler,
+        trigger_handler=trigger_handler,
+    )
     nc = NextcloudApp()
     if nc.enabled_state:
         app_enabled.set()
+    start_bg_task()
     yield
 
 
 APP = FastAPI(lifespan=lifespan)
 APP.add_middleware(AppAPIAuthMiddleware)  # set global AppAPI authentication middleware
 
+def start_bg_task():
+    t = threading.Thread(target=background_thread_task)
+    t.start()
 
-class BackgroundProcessTask(threading.Thread):
-    def run(self, *args, **kwargs):  # pylint: disable=unused-argument
-        nc = NextcloudApp()
-        while not app_enabled.is_set():
-            sleep(5)
+def background_thread_task():
+    nc = NextcloudApp()
+    while not app_enabled.is_set():
+        sleep(5)
 
-        pipe = load_model()
+    pipe = load_model()
 
-        while True:
-            if not app_enabled.is_set() or pipe is None:
-                sleep(30)
+    while True:
+        if not app_enabled.is_set() or pipe is None:
+            sleep(30)
+            continue
+        try:
+            next = nc.providers.task_processing.next_task([TASKPROCESSING_PROVIDER_ID], ['core:text2image'])
+            if not 'task' in next or next is None:
+                wait_for_task()
                 continue
+            task = next.get('task')
+        except Exception as e:
+            print(str(e))
+            log(nc, LogLvl.ERROR, str(e))
+            wait_for_task(30)
+            continue
+        try:
+            log(nc, LogLvl.INFO, f"Next task: {task['id']}")
+
+            log(nc, LogLvl.INFO, "generating image")
+            time_start = perf_counter()
+            prompt = task.get("input").get('input')
+            size = task.get('input').get('size') or '512x512'
+            width, height = size.split('x')
+            width = int(width)
+            height = int(height)
+            images: List[PIL.Image.Image] = pipe(width=width, height=height, prompt=prompt, num_inference_steps=int(os.getenv('NUM_INFERENCE_STEPS', 4)), guidance_scale=0.0, num_images_per_prompt=task.get("input").get('numberOfImages')).images
+            log(nc, LogLvl.INFO, f"image generated: {perf_counter() - time_start}s")
+
+            img_ids = []
+            for image in images:
+                png_stream = io.BytesIO()
+                image.save(png_stream, format="PNG")
+                png_stream.seek(0)
+                img_ids.append(nc.providers.task_processing.upload_result_file(task.get('id'), png_stream))
+
+            NextcloudApp().providers.task_processing.report_result(
+                task["id"],
+                {'images': img_ids},
+            )
+        except Exception as e:  # noqa
+            print(str(e))
             try:
-                next = nc.providers.task_processing.next_task([TASKPROCESSING_PROVIDER_ID], ['core:text2image'])
-                if not 'task' in next or next is None:
-                    sleep(5)
-                    continue
-                task = next.get('task')
-            except Exception as e:
-                print(str(e))
                 log(nc, LogLvl.ERROR, str(e))
-                sleep(30)
-                continue
-            try:
-                log(nc, LogLvl.INFO, f"Next task: {task['id']}")
-
-                log(nc, LogLvl.INFO, "generating image")
-                time_start = perf_counter()
-                prompt = task.get("input").get('input')
-                size = task.get('input').get('size') or '512x512'
-                width, height = size.split('x')
-                width = int(width)
-                height = int(height)
-                images: List[PIL.Image.Image] = pipe(width=width, height=height, prompt=prompt, num_inference_steps=int(os.getenv('NUM_INFERENCE_STEPS', 4)), guidance_scale=0.0, num_images_per_prompt=task.get("input").get('numberOfImages')).images
-                log(nc, LogLvl.INFO, f"image generated: {perf_counter() - time_start}s")
-
-                img_ids = []
-                for image in images:
-                    png_stream = io.BytesIO()
-                    image.save(png_stream, format="PNG")
-                    img_ids.append(nc.providers.task_processing.upload_result_file(task.get('id'), png_stream))
-
-                NextcloudApp().providers.task_processing.report_result(
-                    task["id"],
-                    {'images': img_ids},
-                )
-            except Exception as e:  # noqa
-                print(str(e))
-                try:
-                    log(nc, LogLvl.ERROR, str(e))
-                    nc.providers.task_processing.report_result(task["id"], None, str(e))
-                except:
-                    pass
-                sleep(30)
+                nc.providers.task_processing.report_result(task["id"], None, str(e))
+            except:
+                pass
+            wait_for_task(30)
 
 
 
@@ -123,7 +135,7 @@ async def enabled_handler(enabled: bool, nc: NextcloudApp) -> str:
     # NOTE: `user` is unavailable on this step, so all NC API calls that require it will fail as unauthorized.
     print(f"enabled={enabled}")
     if enabled:
-        nc.log(LogLvl.WARNING, f"Enabled: {nc.app_cfg.app_name}")
+        await nc.log(LogLvl.WARNING, f"Enabled: {nc.app_cfg.app_name}")
         await nc.providers.task_processing.register(TaskProcessingProvider(
             id=TASKPROCESSING_PROVIDER_ID,
             name='Nextcloud Local Image Generation: Stable Diffusion',
@@ -142,6 +154,23 @@ async def enabled_handler(enabled: bool, nc: NextcloudApp) -> str:
     # In case of an error, a non-empty short string should be returned, which will be shown to the NC administrator.
     return ""
 
+
+def trigger_handler(providerId: str):
+    # This will only get called on Nextcloud 33+
+    TRIGGER.set()
+
+# Waits for `interval` seconds or `WAIT_INTERVAL` seconds
+# if `interval` is not set. If TRIGGER gets set in the meantime,
+# WAIT_INTERVAL gets overriden with WAIT_INTERVAL_WITH_TRIGGER which should be longer
+def wait_for_task(interval = None):
+    global TRIGGER
+    global WAIT_INTERVAL
+    global WAIT_INTERVAL_WITH_TRIGGER
+    if interval is None:
+        interval = WAIT_INTERVAL
+    if TRIGGER.wait(timeout=interval):
+        WAIT_INTERVAL = WAIT_INTERVAL_WITH_TRIGGER
+    TRIGGER.clear()
 
 if __name__ == "__main__":
     # Wrapper around `uvicorn.run`.
