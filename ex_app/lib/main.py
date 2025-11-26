@@ -9,12 +9,15 @@ import logging
 
 import torch
 import PIL.Image
+from PIL import PngImagePlugin
 from fastapi import FastAPI
 from nc_py_api import NextcloudApp
 from nc_py_api.ex_app import AppAPIAuthMiddleware, LogLvl, run_app, set_handlers, get_computation_device
 from diffusers import AutoPipelineForText2Image
 from nc_py_api.ex_app.providers.task_processing import TaskProcessingProvider, ShapeDescriptor, ShapeType
 from typing import List
+
+from ex_app.lib.watermarking import markImage
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', handlers=[logging.StreamHandler()])
 logger = logging.getLogger(__name__)
@@ -110,8 +113,12 @@ def background_thread_task():
 
             img_ids = []
             for image in images:
-                png_stream = io.BytesIO()
-                image.save(png_stream, format="PNG")
+                markImage(image) # Add AI watermark
+                    png_stream = io.BytesIO()
+                    metadata = PngImagePlugin.PngInfo()
+                    metadata.add_text("Comment", "Generated using Artificial intelligence")
+                image.save(png_stream, format="PNG", pnginfo=metadata)
+                    png_stream.seek(0)
                 png_stream.seek(0)
                 img_ids.append(nc.providers.task_processing.upload_result_file(task.get('id'), png_stream))
 
