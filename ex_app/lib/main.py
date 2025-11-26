@@ -108,17 +108,26 @@ def background_thread_task():
             width, height = size.split('x')
             width = int(width)
             height = int(height)
-            images: List[PIL.Image.Image] = pipe(width=width, height=height, prompt=prompt, num_inference_steps=int(os.getenv('NUM_INFERENCE_STEPS', 4)), guidance_scale=0.0, num_images_per_prompt=task.get("input").get('numberOfImages')).images
+            inference_steps = int(os.getenv('NUM_INFERENCE_STEPS', 4))
+            images: List[PIL.Image.Image] = pipe(
+                width=width,
+                height=height,
+                prompt=prompt,
+                num_inference_steps=inference_steps,
+                guidance_scale=0.0,
+                num_images_per_prompt=task.get("input").get('numberOfImages'),
+                callback_on_step_end=lambda diffusion, step, timestep, _, **kwargs:
+                    NextcloudApp().providers.task_processing.set_progress(task.get('id'), (step+1) / inference_steps * 100)
+            ).images
             log(nc, LogLvl.INFO, f"image generated: {perf_counter() - time_start}s")
 
             img_ids = []
             for image in images:
                 markImage(image) # Add AI watermark
-                    png_stream = io.BytesIO()
-                    metadata = PngImagePlugin.PngInfo()
-                    metadata.add_text("Comment", "Generated using Artificial intelligence")
+                png_stream = io.BytesIO()
+                metadata = PngImagePlugin.PngInfo()
+                metadata.add_text("Comment", "Generated using Artificial intelligence")
                 image.save(png_stream, format="PNG", pnginfo=metadata)
-                    png_stream.seek(0)
                 png_stream.seek(0)
                 img_ids.append(nc.providers.task_processing.upload_result_file(task.get('id'), png_stream))
 
