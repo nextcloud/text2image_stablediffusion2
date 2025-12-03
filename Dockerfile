@@ -41,6 +41,7 @@ COPY --chmod=775 healthcheck.sh /
 COPY --chmod=775 start.sh /
 
 WORKDIR /ex_app/lib
+ENV PYTHONPATH=/
 ENTRYPOINT ["/start.sh", "python3", "main.py"]
 
 LABEL org.opencontainers.image.source=https://github.com/nextcloud/text2image_stablediffusion2
