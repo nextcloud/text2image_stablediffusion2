@@ -140,6 +140,8 @@ jobs:
       - name: Install app
         working-directory: ${{ env.APP_NAME }}
         run: |
+          python3 -m pip install --upgrade pip setuptools wheel
+          python3 -m pip install torch --index-url https://download.pytorch.org/whl/cpu
           python3 -m pip install -r requirements.txt
 
       - name: Install and init backend
