@@ -10,7 +10,7 @@ Text2Image provider using Stable Diffusion XL by Stability AI
 The models run completely on your machine. No private data leaves your servers.
 ]]>
 	</description>
-	<version>1.1.0</version>
+	<version>1.2.0</version>
 	<licence>MIT</licence>
 	<author mail="mklehr@gmx.net" homepage="https://marcelklehr.de">Marcel Klehr</author>
 	<namespace>Text2ImageStableDiffusion2</namespace>
@@ -20,7 +20,7 @@ The models run completely on your machine. No private data leaves your servers.
 	<bugs>https://github.com/nextcloud/text2image_stablediffusion2/issues</bugs>
 	<repository type="git">https://github.com/nextcloud/text2image_stablediffusion2</repository>
 	<dependencies>
-		<nextcloud min-version="30" max-version="32"/>
+		<nextcloud min-version="30" max-version="33"/>
 	</dependencies>
 	<external-app>
 		<docker-install>
