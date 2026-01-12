@@ -99,6 +99,15 @@ def background_thread_task():
         try:
             log(nc, LogLvl.INFO, f"Next task: {task['id']}")
 
+            if task.get('input').get('numberOfImages') > 12 or task.get('input').get('numberOfImages') < 1:
+                try:
+                    nc.providers.task_processing.report_result(task["id"], None, 'numberOfImages is out of bounds')
+                except:
+                    pass
+                finally:
+                    continue
+
+
             log(nc, LogLvl.INFO, "generating image")
             time_start = perf_counter()
             prompt = task.get("input").get('input')
