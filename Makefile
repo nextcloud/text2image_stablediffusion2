@@ -2,7 +2,7 @@
 
 APP_ID := text2image_stablediffusion2
 APP_NAME := Local Image Generation: Stable diffusion
-APP_VERSION := 1.2.1
+APP_VERSION := 1.3.0
 JSON_INFO := "{\"id\":\"$(APP_ID)\",\"name\":\"$(APP_NAME)\",\"daemon_config_name\":\"manual_install\",\"version\":\"$(APP_VERSION)\",\"secret\":\"12345\",\"port\":9030}"
 
 
