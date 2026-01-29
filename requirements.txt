@@ -1,5 +1,5 @@
 nc_py_api[app]>=0.23.0
 diffusers
-transformers
+transformers==v4.57.6
 accelerate
 niquests
