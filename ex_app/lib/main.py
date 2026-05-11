@@ -9,11 +9,13 @@ from time import perf_counter, sleep
 from typing import List
 
 import PIL.Image
+import niquests
+from niquests.exceptions import RequestException
 import torch
 from PIL import ImageDraw, ImageFont, PngImagePlugin
 from diffusers import AutoPipelineForText2Image
 from fastapi import FastAPI
-from nc_py_api import NextcloudApp
+from nc_py_api import NextcloudApp, NextcloudException
 from nc_py_api.ex_app import AppAPIAuthMiddleware, LogLvl, get_computation_device, run_app, set_handlers
 from nc_py_api.ex_app.providers.task_processing import ShapeDescriptor, ShapeType, TaskProcessingProvider
 
@@ -30,7 +32,8 @@ def log(nc, level, content):
     except:
         pass
 
-TASKPROCESSING_PROVIDER_ID = 'text2image_stablediffusion2:sdxl_turbo'
+TASKPROCESSING_PROVIDER_ID_BASIC = 'text2image_stablediffusion2:sdxl_turbo'
+TASKPROCESSING_PROVIDER_ID_ENHANCED = 'text2image_stablediffusion2:sdxl_turbo_enhanced'
 
 def load_model():
     if get_computation_device().lower() == 'cuda':
@@ -70,6 +73,73 @@ async def lifespan(app: FastAPI):
 APP = FastAPI(lifespan=lifespan)
 APP.add_middleware(AppAPIAuthMiddleware)  # set global AppAPI authentication middleware
 
+def schedule_prompt_improvement_and_wait(nc: NextcloudApp, original_prompt: str) -> str:
+    if original_prompt.strip() == "":
+        return original_prompt
+    try:
+        data = nc.ocs(
+            "POST",
+            "/ocs/v1.php/taskprocessing/schedule?format=json",
+            headers={"OCS-APIRequest": "true"},
+            json={
+                "input": {"input": original_prompt},
+                "type": "core:text2text",
+                "appId": os.environ["APP_ID"],
+            },
+        )
+    except RequestException as e:
+        raise RuntimeError(f"Failed to schedule prompt improvement task: {e}") from e
+
+    task_id = data.get("task", {}).get("id")
+
+    if not isinstance(task_id, int):
+        raise RuntimeError(f"Unexpected schedule response: {data!r}")
+
+    task = {"id": task_id, "status": "STATUS_SCHEDULED", "output": None}
+    i = 0
+    while (
+        task.get("status") != "STATUS_SUCCESSFUL"
+        and task.get("status") != "STATUS_FAILED"
+        and i < 60 * 6
+    ):
+        if i < 60 * 3:
+            sleep(5)
+            i += 1
+        else:
+            # poll every 10 secs in the second half
+            sleep(10)
+            i += 2
+
+        try:
+            response = nc.ocs("GET", f"/ocs/v1.php/taskprocessing/task/{task_id}")
+        except (
+            niquests.exceptions.ConnectionError,
+            niquests.exceptions.Timeout,
+        ) as e:
+            log(nc, LogLvl.WARNING, f"Ignored error during task polling: {e}")
+            sleep(5)
+            i += 1
+            continue
+        except NextcloudException as e:
+            if getattr(e, "status_code", None) == niquests.codes.too_many_requests:
+                log(nc, LogLvl.WARNING, "Rate limited during task polling, waiting 10s before retrying")
+                sleep(10)
+                i += 2
+                continue
+            raise RuntimeError("Failed to poll Nextcloud TaskProcessing task") from e
+
+        task = (response or {}).get("task", task)
+        log(nc, LogLvl.INFO, f"Task poll ({i * 5}s) response: {task}")
+
+    if task.get("status") == "STATUS_SUCCESSFUL":
+        output = (task.get("output") or {}).get("output")
+        if isinstance(output, str) and output.strip():
+            return output
+        raise RuntimeError(f"Prompt improvement returned empty output: {task!r}")
+    if task.get("status") == "STATUS_FAILED":
+        raise RuntimeError(f"Prompt improvement failed: {task!r}")
+    raise RuntimeError("Prompt improvement timed out")
+
 def start_bg_task():
     t = threading.Thread(target=background_thread_task)
     t.start()
@@ -86,11 +156,15 @@ def background_thread_task():
             sleep(30)
             continue
         try:
-            next = nc.providers.task_processing.next_task([TASKPROCESSING_PROVIDER_ID], ['core:text2image'])
+            next = nc.providers.task_processing.next_task(
+                [TASKPROCESSING_PROVIDER_ID_BASIC, TASKPROCESSING_PROVIDER_ID_ENHANCED],
+                ['core:text2image'],
+            )
             if not 'task' in next or next is None:
                 wait_for_task()
                 continue
             task = next.get('task')
+            provider_id = next.get("provider", {}).get("name")
         except Exception as e:
             print(str(e))
             log(nc, LogLvl.ERROR, str(e))
@@ -110,7 +184,33 @@ def background_thread_task():
 
             log(nc, LogLvl.INFO, "generating image")
             time_start = perf_counter()
-            prompt = task.get("input").get('input')
+            original_prompt = task.get("input").get('input')
+            prompt = original_prompt
+            progress = 0
+            log(nc, LogLvl.INFO, f"task: {next!r}")
+            nc.set_user(task["userId"])
+       
+
+            if provider_id == TASKPROCESSING_PROVIDER_ID_ENHANCED:
+                transcript = (
+                    "Please refine the following image-generation prompt to help a text-to-image model create a stunning, visually captivating, and coherent image. "
+                    "Where appropriate, enrich the prompt with specific visual details such as subject, composition, lighting, atmosphere, and artistic style. "
+                    "Preserve the original intent. Return ONLY the improved prompt as a single line, without any preamble, explanation, or quotes and keep under 50 words.\n\n"
+                    "Original prompt:\n"
+                    + original_prompt
+                )
+           
+                try:
+                    log(nc, LogLvl.INFO, "scheduling prompt improvement")
+                    prompt = schedule_prompt_improvement_and_wait(nc, transcript)
+                    NextcloudApp().providers.task_processing.set_progress(task.get('id'), 25)
+                    progress = 25
+                    log(nc, LogLvl.INFO, "prompt improvement successful")
+                except Exception as e:
+                    log(nc, LogLvl.WARNING, f"prompt improvement failed, using original prompt: {e}")
+
+            log(nc, LogLvl.INFO, f"prompt: {prompt}")
+
             size = task.get('input').get('size') or '512x512'
             width, height = size.split('x')
             width = int(width)
@@ -124,7 +224,7 @@ def background_thread_task():
                 guidance_scale=0.0,
                 num_images_per_prompt=task.get("input").get('numberOfImages'),
                 callback_on_step_end=lambda diffusion, step, timestep, _, **kwargs:
-                    NextcloudApp().providers.task_processing.set_progress(task.get('id'), (step+1) / inference_steps * 100)
+                    NextcloudApp().providers.task_processing.set_progress(task.get('id'), (step+1) / inference_steps * (100 - progress) + progress)
             ).images
             log(nc, LogLvl.INFO, f"image generated: {perf_counter() - time_start}s")
 
@@ -160,7 +260,7 @@ async def enabled_handler(enabled: bool, nc: NextcloudApp) -> str:
     if enabled:
         await nc.log(LogLvl.WARNING, f"Enabled: {nc.app_cfg.app_name}")
         await nc.providers.task_processing.register(TaskProcessingProvider(
-            id=TASKPROCESSING_PROVIDER_ID,
+            id=TASKPROCESSING_PROVIDER_ID_BASIC,
             name='Nextcloud Local Image Generation: Stable Diffusion',
             task_type='core:text2image',
             expected_runtime=120,
@@ -169,9 +269,20 @@ async def enabled_handler(enabled: bool, nc: NextcloudApp) -> str:
             ],
             input_shape_defaults={'size': '512x512', "numberOfImages": 1},
         ))
+        await nc.providers.task_processing.register(TaskProcessingProvider(
+            id=TASKPROCESSING_PROVIDER_ID_ENHANCED,
+            name='Nextcloud Local Image Generation: Stable Diffusion (Enhanced)',
+            task_type='core:text2image',
+            expected_runtime=140,
+            optional_input_shape=[
+                ShapeDescriptor(name='size', description='Optional. The size of the generated images. Must be in 512x512 format. Default is 512x512', shape_type=ShapeType.TEXT),
+            ],
+            input_shape_defaults={'size': '512x512', "numberOfImages": 1},
+        ))
         app_enabled.set()
     else:
-        await nc.providers.task_processing.unregister('text2image_stablediffusion2:sdxl_turbo', True)
+        await nc.providers.task_processing.unregister(TASKPROCESSING_PROVIDER_ID_BASIC, True)
+        await nc.providers.task_processing.unregister(TASKPROCESSING_PROVIDER_ID_ENHANCED, True)
         nc.log(LogLvl.WARNING, f"Disabled {nc.app_cfg.app_name}")
         app_enabled.clear()
     # In case of an error, a non-empty short string should be returned, which will be shown to the NC administrator.
