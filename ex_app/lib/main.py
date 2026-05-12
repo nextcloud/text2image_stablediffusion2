@@ -189,25 +189,30 @@ def background_thread_task():
             progress = 0
             log(nc, LogLvl.INFO, f"task: {next!r}")
             nc.set_user(task["userId"])
-       
+
+            result = {}
 
             if provider_id == TASKPROCESSING_PROVIDER_ID_ENHANCED:
-                transcript = (
-                    "Please refine the following image-generation prompt to help a text-to-image model create a stunning, visually captivating, and coherent image. "
-                    "Where appropriate, enrich the prompt with specific visual details such as subject, composition, lighting, atmosphere, and artistic style. "
-                    "Preserve the original intent. Return ONLY the improved prompt as a single line, without any preamble, explanation, or quotes and keep under 50 words.\n\n"
-                    "Original prompt:\n"
-                    + original_prompt
-                )
-           
-                try:
-                    log(nc, LogLvl.INFO, "scheduling prompt improvement")
-                    prompt = schedule_prompt_improvement_and_wait(nc, transcript)
-                    NextcloudApp().providers.task_processing.set_progress(task.get('id'), 25)
-                    progress = 25
-                    log(nc, LogLvl.INFO, "prompt improvement successful")
-                except Exception as e:
-                    log(nc, LogLvl.WARNING, f"prompt improvement failed, using original prompt: {e}")
+                if task.get("userId") is None:
+                    log(nc, LogLvl.WARNING, "userId is None skipping prompt improvement")
+                else:
+                    transcript = (
+                        "Please refine the following image-generation prompt to help a text-to-image model create a stunning, visually captivating, and coherent image. "
+                        "Where appropriate, enrich the prompt with specific visual details such as subject, composition, lighting, atmosphere, and artistic style. "
+                        "Preserve the original intent. Return ONLY the improved prompt as a single line, without any preamble, explanation, or quotes.\n\n"
+                        "Original prompt:\n"
+                        + original_prompt
+                    )
+            
+                    try:
+                        log(nc, LogLvl.INFO, "scheduling prompt improvement")
+                        prompt = schedule_prompt_improvement_and_wait(nc, transcript)
+                        NextcloudApp().providers.task_processing.set_progress(task.get('id'), 25)
+                        progress = 25
+                        result['enhanced_prompt'] = prompt
+                        log(nc, LogLvl.INFO, "prompt improvement successful")
+                    except Exception as e:
+                        log(nc, LogLvl.WARNING, f"prompt improvement failed, using original prompt: {e}")
 
             log(nc, LogLvl.INFO, f"prompt: {prompt}")
 
@@ -237,10 +242,12 @@ def background_thread_task():
                 image.save(png_stream, format="PNG", pnginfo=metadata)
                 png_stream.seek(0)
                 img_ids.append(nc.providers.task_processing.upload_result_file(task.get('id'), png_stream))
+            
+            result['images'] = img_ids
 
             NextcloudApp().providers.task_processing.report_result(
                 task["id"],
-                {'images': img_ids},
+                result,
             )
         except Exception as e:  # noqa
             print(str(e))
@@ -278,6 +285,9 @@ async def enabled_handler(enabled: bool, nc: NextcloudApp) -> str:
                 ShapeDescriptor(name='size', description='Optional. The size of the generated images. Must be in 512x512 format. Default is 512x512', shape_type=ShapeType.TEXT),
             ],
             input_shape_defaults={'size': '512x512', "numberOfImages": 1},
+            optional_output_shape=[
+                ShapeDescriptor(name='enhanced_prompt', description='The enhanced prompt used for the image generation.', shape_type=ShapeType.TEXT),
+            ]
         ))
         app_enabled.set()
     else:
