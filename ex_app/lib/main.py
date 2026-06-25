@@ -18,6 +18,7 @@ from fastapi import FastAPI
 from nc_py_api import NextcloudApp, NextcloudException
 from nc_py_api.ex_app import AppAPIAuthMiddleware, LogLvl, get_computation_device, run_app, set_handlers
 from nc_py_api.ex_app.providers.task_processing import ShapeDescriptor, ShapeType, TaskProcessingProvider
+from compel_support import build_prompt_conditioning, init_sdxl_compel
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', handlers=[logging.StreamHandler()])
 logger = logging.getLogger(__name__)
@@ -150,6 +151,8 @@ def background_thread_task():
         sleep(5)
 
     pipe = load_model()
+    device = "cuda" if get_computation_device().lower() == "cuda" else "cpu"
+    compel = init_sdxl_compel(pipe, device=device)
 
     while True:
         if not app_enabled.is_set() or pipe is None:
@@ -221,16 +224,28 @@ def background_thread_task():
             width = int(width)
             height = int(height)
             inference_steps = int(os.getenv('NUM_INFERENCE_STEPS', 4))
-            images: List[PIL.Image.Image] = pipe(
-                width=width,
-                height=height,
-                prompt=prompt,
-                num_inference_steps=inference_steps,
-                guidance_scale=0.0,
-                num_images_per_prompt=task.get("input").get('numberOfImages'),
-                callback_on_step_end=lambda diffusion, step, timestep, _, **kwargs:
+            common_kwargs = {
+                "width": width,
+                "height": height,
+                "num_inference_steps": inference_steps,
+                "guidance_scale": 0.0,
+                "num_images_per_prompt": task.get("input").get('numberOfImages'),
+                "callback_on_step_end": lambda diffusion, step, timestep, _, **kwargs:
                     NextcloudApp().providers.task_processing.set_progress(task.get('id'), (step+1) / inference_steps * (100 - progress) + progress)
-            ).images
+            }
+
+            conditioning = build_prompt_conditioning(prompt, compel)
+            if conditioning is None:
+                images: List[PIL.Image.Image] = pipe(
+                    prompt=prompt,
+                    **common_kwargs,
+                ).images
+            else:
+                images: List[PIL.Image.Image] = pipe(
+                    prompt_embeds=conditioning.embeds,
+                    pooled_prompt_embeds=conditioning.pooled_embeds,
+                    **common_kwargs,
+                ).images
             log(nc, LogLvl.INFO, f"image generated: {perf_counter() - time_start}s")
 
             img_ids = []
