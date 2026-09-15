@@ -1,9 +1,10 @@
-"""encode sdxl prompts longer than the tokenizer limitby splitting them into chunks"""
+"""Encode SDXL prompts longer than the tokenizer limit by splitting them into chunks."""
 
 import torch
 
 
-def encode_prompt(pipe, prompt, device):
+def encode_prompt(pipe, prompt):
+    device = pipe._execution_device
     tokenizer = pipe.tokenizer
     tokenizer_2 = pipe.tokenizer_2
 

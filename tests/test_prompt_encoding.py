@@ -63,6 +63,7 @@ class _FakeTextEncoder:
 
 class _FakePipeline:
     def __init__(self, tokenizer_2=None):
+        self._execution_device = torch.device("cpu")
         self.tokenizer = _FakeTokenizer()
         self.tokenizer_2 = tokenizer_2 if tokenizer_2 is not None else _FakeTokenizer()
         self.text_encoder = _FakeTextEncoder(embedding_size=2)
@@ -73,7 +74,7 @@ class EncodeSdxlPromptTests(unittest.TestCase):
     def test_short_prompt_uses_one_chunk_for_both_encoders(self):
         pipe = _FakePipeline()
 
-        prompt_embeds, pooled_prompt_embeds = encode_prompt(pipe, "ab", "cpu")
+        prompt_embeds, pooled_prompt_embeds = encode_prompt(pipe, "ab")
 
         expected_tokens = [101, ord("a"), ord("b"), 102, 0, 0]
         self.assertEqual(pipe.text_encoder.input_ids, [expected_tokens])
@@ -84,7 +85,7 @@ class EncodeSdxlPromptTests(unittest.TestCase):
     def test_long_prompt_encodes_every_token_across_multiple_chunks(self):
         pipe = _FakePipeline()
 
-        prompt_embeds, _ = encode_prompt(pipe, "abcdef", "cpu")
+        prompt_embeds, _ = encode_prompt(pipe, "abcdef")
 
         self.assertEqual(
             pipe.text_encoder.input_ids,
@@ -100,7 +101,7 @@ class EncodeSdxlPromptTests(unittest.TestCase):
     def test_shorter_tokenization_is_padded_with_an_empty_chunk(self):
         pipe = _FakePipeline(tokenizer_2=_FakeTokenizer(extra_token=999))
 
-        prompt_embeds, _ = encode_prompt(pipe, "abcd", "cpu")
+        prompt_embeds, _ = encode_prompt(pipe, "abcd")
 
         self.assertEqual(
             pipe.text_encoder.input_ids,
@@ -115,7 +116,7 @@ class EncodeSdxlPromptTests(unittest.TestCase):
     def test_pooled_embeddings_come_from_the_first_chunk(self):
         pipe = _FakePipeline()
 
-        _, pooled_prompt_embeds = encode_prompt(pipe, "abcdef", "cpu")
+        _, pooled_prompt_embeds = encode_prompt(pipe, "abcdef")
 
         first_chunk = torch.tensor(pipe.text_encoder_2.input_ids[0])
         expected = first_chunk.sum().repeat(3).reshape(1, 3).to(torch.float32)

@@ -151,7 +151,6 @@ def background_thread_task():
         sleep(5)
 
     pipe = load_model()
-    device = "cuda" if get_computation_device().lower() == "cuda" else "cpu"
 
     while True:
         if not app_enabled.is_set() or pipe is None:
@@ -223,7 +222,7 @@ def background_thread_task():
             width = int(width)
             height = int(height)
             inference_steps = int(os.getenv('NUM_INFERENCE_STEPS', 4))
-            prompt_embeds, pooled_prompt_embeds = encode_prompt(pipe, prompt, device)
+            prompt_embeds, pooled_prompt_embeds = encode_prompt(pipe, prompt)
             images: List[PIL.Image.Image] = pipe(
                 width=width,
                 height=height,
