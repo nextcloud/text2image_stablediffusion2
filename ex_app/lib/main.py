@@ -18,6 +18,7 @@ from fastapi import FastAPI
 from nc_py_api import NextcloudApp, NextcloudException
 from nc_py_api.ex_app import AppAPIAuthMiddleware, LogLvl, get_computation_device, run_app, set_handlers
 from nc_py_api.ex_app.providers.task_processing import ShapeDescriptor, ShapeType, TaskProcessingProvider
+from prompt_encoding import encode_prompt
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', handlers=[logging.StreamHandler()])
 logger = logging.getLogger(__name__)
@@ -221,10 +222,12 @@ def background_thread_task():
             width = int(width)
             height = int(height)
             inference_steps = int(os.getenv('NUM_INFERENCE_STEPS', 4))
+            prompt_embeds, pooled_prompt_embeds = encode_prompt(pipe, prompt)
             images: List[PIL.Image.Image] = pipe(
                 width=width,
                 height=height,
-                prompt=prompt,
+                prompt_embeds=prompt_embeds,
+                pooled_prompt_embeds=pooled_prompt_embeds,
                 num_inference_steps=inference_steps,
                 guidance_scale=0.0,
                 num_images_per_prompt=task.get("input").get('numberOfImages'),
