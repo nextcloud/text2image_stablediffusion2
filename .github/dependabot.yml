@@ -10,3 +10,18 @@ updates:
       time: "03:00"
       timezone: Europe/Paris
     open-pull-requests-limit: 10
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: saturday
+      time: "03:00"
+      timezone: Europe/Paris
+    open-pull-requests-limit: 10
+    groups:
+      torch:
+        patterns: ["torch", "triton", "nvidia-*", "cuda-*"]
+    # Pinned in pyproject.toml to the versions torch requires; updated together with torch
+    ignore:
+      - dependency-name: "nvidia-cublas"
+      - dependency-name: "nvidia-cuda-nvrtc"
