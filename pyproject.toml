@@ -15,12 +15,12 @@ nvidia-cuda-nvrtc = "13.2.86"
 
 [tool.black]
 line-length = 120
-target-versions = ["py310"]
+target-version = ["py311"]
 preview = true
 
 [tool.ruff]
 line-length = 120
-target-version = "py310"
+target-version = "py311"
 select = ["A", "B", "C", "D", "E", "F", "G", "I", "S", "SIM", "PIE", "Q", "RET", "RUF", "UP" , "W"]
 extend-ignore = ["D101", "D102", "D103", "D105", "D107", "D203", "D213", "D401", "I001", "RUF100", "D400", "D415"]
 
@@ -28,7 +28,7 @@ extend-ignore = ["D101", "D102", "D103", "D105", "D107", "D203", "D213", "D401",
 profile = "black"
 
 [tool.pylint]
-master.py-version = "3.10"
+master.py-version = "3.11"
 master.extension-pkg-allow-list = ["pydantic"]
 design.max-attributes = 8
 design.max-locals = 16
