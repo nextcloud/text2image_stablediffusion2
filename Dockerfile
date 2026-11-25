@@ -1,7 +1,5 @@
 FROM nvidia/cuda:12.2.2-cudnn8-devel-ubuntu22.04
 
-COPY requirements.txt /
-
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN \
@@ -43,8 +41,15 @@ RUN set -ex; \
     rm -rf /tmp/frp_${FRP_VERSION}_linux_${FRP_ARCH} /tmp/frp.tar.gz; \
     echo "FRP client installed successfully"
 
+# Install requirements from poetry.lock into /opt/app/.venv
+WORKDIR /opt/app
+COPY pyproject.toml poetry.lock ./
 RUN \
-  python3 -m pip install -r requirements.txt && rm -rf ~/.cache && rm requirements.txt
+  python3 -m venv /opt/poetry && \
+  /opt/poetry/bin/pip install poetry==2.5.2 && \
+  python3 -m venv /opt/app/.venv && \
+  POETRY_VIRTUALENVS_IN_PROJECT=1 /opt/poetry/bin/poetry install && \
+  rm -rf /opt/poetry ~/.cache
 
 ADD /ex_app/cs[s] /ex_app/css
 ADD /ex_app/im[g] /ex_app/img
@@ -56,7 +61,7 @@ COPY --chmod=775 healthcheck.sh /
 COPY --chmod=775 start.sh /
 
 WORKDIR /ex_app/lib
-ENTRYPOINT ["/start.sh", "python3", "main.py"]
+ENTRYPOINT ["/start.sh", "/opt/app/.venv/bin/python", "main.py"]
 
 LABEL org.opencontainers.image.source=https://github.com/nextcloud/text2image_stablediffusion2
 HEALTHCHECK --interval=2s --timeout=2s --retries=300 CMD /healthcheck.sh
