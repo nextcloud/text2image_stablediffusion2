@@ -35,8 +35,21 @@ def log(nc, level, content):
 TASKPROCESSING_PROVIDER_ID_BASIC = 'text2image_stablediffusion2:sdxl_turbo'
 TASKPROCESSING_PROVIDER_ID_ENHANCED = 'text2image_stablediffusion2:sdxl_turbo_enhanced'
 
-def load_model():
-    if get_computation_device().lower() == 'cuda':
+def cuda_unavailable_reason() -> str:
+    try:
+        torch.cuda.init()
+    except Exception as e:  # noqa
+        return str(e)
+    return "unknown reason"
+
+def load_model(nc: NextcloudApp):
+    device = get_computation_device().lower()
+    if device == "cuda" and not torch.cuda.is_available():
+        log(nc, LogLvl.ERROR, "CUDA was selected as the compute device but is not available, "
+            "falling back to the much slower CPU. This app needs an NVIDIA GPU with driver 580 or newer. "
+            f"Reason: {cuda_unavailable_reason()}")
+        device = "cpu"
+    if device == "cuda":
         pipe = AutoPipelineForText2Image.from_pretrained("Nextcloud-AI/sdxl-turbo", torch_dtype=torch.float16,
                                                          variant="fp16")
         pipe.to("cuda")
@@ -149,7 +162,7 @@ def background_thread_task():
     while not app_enabled.is_set():
         sleep(5)
 
-    pipe = load_model()
+    pipe = load_model(nc)
 
     while True:
         if not app_enabled.is_set() or pipe is None:
